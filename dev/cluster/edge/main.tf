@@ -1,14 +1,26 @@
+provider "aws" {
+  region = "${var.aws_region}"
+}
+
+# Load VPC related information
 data "terraform_remote_state" "vpc" {
-  backend = "s3"
+  backend  = "s3"
+
   config {
     bucket = "monolive-terraform-state"
-    key = "dev/vpc/terraform.tfstate"    
+    key    = "dev/vpc/terraform.tfstate"
     region = "eu-west-2"
   }
 }
 
-provider "aws" {
-  region = "${var.aws_region}" 
+# Load public subnet related information
+data "terraform_remote_state" "public_network" {
+  backend  = "s3"
+  config {
+    bucket = "monolive-terraform-state"
+    key    = "dev/cluster/public_network/terraform.tfstate"
+    region = "eu-west-2"
+  }
 }
 
 # A security group for the public node so it is accessible via the web
@@ -39,8 +51,9 @@ resource "aws_instance" "public" {
   # communicate with the resource (instance)
   connection {
     # The default username for our AMI
-    user = "centos"
+    user = "${var.user}"
   }
+
   instance_type = "t2.micro"
 
   # Lookup the correct AMI based on the region
@@ -52,6 +65,8 @@ resource "aws_instance" "public" {
 
   # Our Security group to allow SSH access
   vpc_security_group_ids = ["${aws_security_group.public.id}"]
-  subnet_id = "${data.terraform_remote_state.vpc.public_subnet}"
-
+  subnet_id              = "${data.terraform_remote_state.public_network.public_subnet}"
+  tags {
+    Name = "edge-node"
+  }
 }
